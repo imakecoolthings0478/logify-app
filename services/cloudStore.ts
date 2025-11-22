@@ -5,11 +5,11 @@ import { Client, Databases, ID, Query } from 'appwrite';
 // ------------------------------------------------------------------
 // CONFIGURATION STORAGE
 // ------------------------------------------------------------------
-// V9: Bumped version to apply new connection logic
-const STORAGE_KEY_CONFIG = 'logify_config_v9';
+// V10: Bumped version for endpoint fix
+const STORAGE_KEY_CONFIG = 'logify_config_v10';
 
 const DEFAULT_CONFIG = {
-  ENDPOINT: "https://cloud.appwrite.io/v1",
+  ENDPOINT: "https://sgp.cloud.appwrite.io/v1", // Updated to Singapore Endpoint
   // REPLACE THESE WITH YOUR OWN APPWRITE PROJECT IDs IF YOU WANT CLOUD SYNC
   PROJECT_ID: "692149fe003bf76cb55b", 
   DB: "69214ab3003cd5ab7575",         
@@ -141,6 +141,7 @@ export const CloudStore = {
               window.location.reload(); // Simplest way to re-hook subscriptions
           } catch (e: any) {
               console.warn("Retry failed:", e);
+              // Don't automatically disconnect here, let the subscriptions handle it
           }
       }
   },
@@ -183,8 +184,6 @@ export const CloudStore = {
                 // ERROR HANDLING REFINED
                 
                 // 1. Check for 404 (Not Found)
-                // This means the backend is reachable, but data is missing. 
-                // We should NOT disconnect, but rather try to fix it.
                 if (e.code === 404) {
                     console.warn("⚠️ Cloud Connected, but Document Not Found (404). Attempting auto-creation...");
                     connectionError = "Data missing (404).";
