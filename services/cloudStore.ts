@@ -131,6 +131,20 @@ export const CloudStore = {
 
   isConfigured: () => isConnected,
 
+  retryConnection: async () => {
+      initAppwrite();
+      if(databases) {
+          try {
+              await databases.getDocument(currentConfig.DB, currentConfig.COLL_SETTINGS, currentConfig.DOC_GLOBAL);
+              isConnected = true;
+              connectionError = null;
+              window.location.reload(); // Simplest way to re-hook subscriptions
+          } catch (e: any) {
+              console.warn("Retry failed:", e);
+          }
+      }
+  },
+
   // --- STATUS ---
   subscribeToStatus: (callback: (status: OrderStatus) => void) => {
     let appwriteUnsub: () => void | undefined;
@@ -173,7 +187,7 @@ export const CloudStore = {
                 // We should NOT disconnect, but rather try to fix it.
                 if (e.code === 404) {
                     console.warn("⚠️ Cloud Connected, but Document Not Found (404). Attempting auto-creation...");
-                    connectionError = "Data missing (404)";
+                    connectionError = "Data missing (404).";
                     
                     try {
                         // Attempt creation (Requires 'create' permission for 'role:any' or authenticated user)
@@ -192,7 +206,7 @@ export const CloudStore = {
                 else if (e.code === 0 || e.message?.toLowerCase().includes('network') || e.message?.toLowerCase().includes('fetch') || e.message?.toLowerCase().includes('failed to fetch')) {
                     console.info("ℹ️ Offline Mode Active: Backend unreachable.");
                     isConnected = false; 
-                    connectionError = "Network Error: Backend Unreachable";
+                    connectionError = "Network Error. Check Appwrite Platform Settings (CORS).";
                 }
                 // 3. Other Errors (Auth, etc)
                 else {
