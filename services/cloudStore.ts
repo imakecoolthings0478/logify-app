@@ -1,18 +1,18 @@
 import { OrderStatus, Announcement } from '../types';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set, push, remove, Database } from 'firebase/database';
+import { getDatabase, ref, onValue, set, push, remove, child, Database } from 'firebase/database';
 
 // ------------------------------------------------------------------
 // FIREBASE CONFIGURATION
 // ------------------------------------------------------------------
 const firebaseConfig = {
-  apiKey: "AIzaSyCbFeJitwzr4fs-JwyqDd1USlMwwpjsi7M",
-  authDomain: "logify-app-1b9cc.firebaseapp.com",
-  databaseURL: "https://logify-app-1b9cc-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "logify-app-1b9cc",
-  storageBucket: "logify-app-1b9cc.firebasestorage.app",
-  messagingSenderId: "805174427748",
-  appId: "1:805174427748:web:0b890d0a7da55955bedf71"
+  apiKey: "AIzaSyAVXNZNepTlSISFkH1xUFhNYZooeGPeujE",
+  authDomain: "logify-web-app.firebaseapp.com",
+  databaseURL: "https://logify-web-app-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "logify-web-app",
+  storageBucket: "logify-web-app.firebasestorage.app",
+  messagingSenderId: "140654179240",
+  appId: "1:140654179240:web:afdf2a37b6c808f34e239d"
 };
 
 let db: Database | null = null;
@@ -70,6 +70,45 @@ export const CloudStore = {
     }
   },
 
+  // ----------------------------------------------------------------
+  // PROMO CODE LOGIC
+  // ----------------------------------------------------------------
+  subscribeToPromoCode: (callback: (code: string) => void) => {
+    if (db) {
+      const promoRef = ref(db, 'promoCode');
+      const unsubscribe = onValue(promoRef, (snapshot) => {
+        const val = snapshot.val();
+        callback(val || '');
+      });
+      return unsubscribe;
+    } else {
+      const load = () => {
+        const stored = localStorage.getItem('promoCode');
+        callback(stored || '');
+      };
+      load();
+      const handler = () => load();
+      window.addEventListener('storage', handler);
+      window.addEventListener('local-promocode-change', handler);
+      return () => {
+        window.removeEventListener('storage', handler);
+        window.removeEventListener('local-promocode-change', handler);
+      };
+    }
+  },
+
+  setPromoCode: (code: string) => {
+    if (db) {
+      set(ref(db, 'promoCode'), code).catch(e => console.error("Error setting promo code:", e));
+    } else {
+      localStorage.setItem('promoCode', code);
+      window.dispatchEvent(new Event('local-promocode-change'));
+    }
+  },
+
+  // ----------------------------------------------------------------
+  // ANNOUNCEMENTS (Legacy/Disabled)
+  // ----------------------------------------------------------------
   subscribeToAnnouncements: (callback: (announcements: Announcement[]) => void) => {
     if (db) {
       const annRef = ref(db, 'announcements');
@@ -130,6 +169,26 @@ export const CloudStore = {
       current.unshift(withId);
       localStorage.setItem('announcements', JSON.stringify(current));
       window.dispatchEvent(new Event('local-announcement-change'));
+    }
+  },
+
+  deleteAnnouncement: async (id: string) => {
+    if (db) {
+      try {
+        const announcementsRef = ref(db, 'announcements');
+        await remove(child(announcementsRef, id));
+        console.log("✅ Announcement deleted successfully:", id);
+      } catch (e) {
+        console.error("❌ Error deleting announcement:", e);
+      }
+    } else {
+      const stored = localStorage.getItem('announcements');
+      if (stored) {
+        // @ts-ignore
+        const current = JSON.parse(stored).filter(a => a.id !== id);
+        localStorage.setItem('announcements', JSON.stringify(current));
+        window.dispatchEvent(new Event('local-announcement-change'));
+      }
     }
   },
 

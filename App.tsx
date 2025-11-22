@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ServiceItem, OrderStatus, Announcement } from './types';
+import { ServiceItem, OrderStatus } from './types';
 import { DISCORD_LINK } from './constants';
 import { CloudStore } from './services/cloudStore';
 import ServiceCard from './components/ServiceCard';
 import PricingPanel from './components/PricingPanel';
 import TermsAndConditions from './components/TermsAndConditions';
 import StatusBanner from './components/StatusBanner';
-import AnnouncementBoard from './components/AnnouncementBoard';
+import PromoCodeSection from './components/PromoCodeSection';
 import AdminPanel from './components/AdminPanel';
 import { Disc as DiscordIcon, Sparkles, Lock } from 'lucide-react';
 
@@ -39,19 +39,16 @@ const SERVICES: ServiceItem[] = [
 
 const App: React.FC = () => {
   const [status, setStatus] = useState<OrderStatus>(OrderStatus.ACCEPTING);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [showAdmin, setShowAdmin] = useState(false);
   // Secret counter to open admin
   const [clickCount, setClickCount] = useState(0);
 
   useEffect(() => {
     const unsubStatus = CloudStore.subscribeToStatus(setStatus);
-    const unsubAnnounce = CloudStore.subscribeToAnnouncements(setAnnouncements);
+    // Announcements removed for now
     return () => {
       // @ts-ignore
       if(unsubStatus) unsubStatus();
-      // @ts-ignore
-      if(unsubAnnounce) unsubAnnounce();
     };
   }, []);
 
@@ -69,9 +66,6 @@ const App: React.FC = () => {
       
       {/* 1. Status Banner at Top */}
       <StatusBanner status={status} />
-
-      {/* 2. Announcement Board */}
-      <AnnouncementBoard announcements={announcements} />
 
       {/* Main Content Container */}
       <main className="flex-grow container mx-auto px-4 pt-10 pb-20">
@@ -118,6 +112,9 @@ const App: React.FC = () => {
           </div>
         </section>
 
+        {/* Promo Code Section (New) */}
+        <PromoCodeSection />
+
         {/* Services Grid */}
         <section id="services" className="py-16">
           <div className="text-center mb-12">
@@ -157,7 +154,6 @@ const App: React.FC = () => {
       {showAdmin && (
         <AdminPanel 
           currentStatus={status}
-          announcements={announcements}
           onClose={() => setShowAdmin(false)}
         />
       )}

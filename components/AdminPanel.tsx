@@ -1,25 +1,31 @@
-import React, { useState } from 'react';
-import { OrderStatus, Announcement } from '../types';
+import React, { useState, useEffect } from 'react';
+import { OrderStatus } from '../types';
 import { CloudStore } from '../services/cloudStore';
-import { X, Send, Radio, ShieldCheck, Trash2, Lock, KeyRound, AlertCircle } from 'lucide-react';
+import { X, Radio, ShieldCheck, Lock, KeyRound, AlertCircle, TicketPercent, Save } from 'lucide-react';
 
 interface AdminPanelProps {
   currentStatus: OrderStatus;
-  announcements: Announcement[];
   onClose: () => void;
 }
 
 // Security Configuration
 const ADMIN_PASSWORD = "logify@makers!are!the!goat853@$r72;[";
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ currentStatus, announcements, onClose }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ currentStatus, onClose }) => {
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [loginError, setLoginError] = useState(false);
 
   // Admin State
-  const [newAnnouncement, setNewAnnouncement] = useState("");
+  const [promoCode, setPromoCode] = useState("");
+  const [savedMessage, setSavedMessage] = useState(false);
+
+  useEffect(() => {
+    const unsub = CloudStore.subscribeToPromoCode(setPromoCode);
+    // @ts-ignore
+    return () => unsub && unsub();
+  }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,18 +42,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentStatus, announcements, o
     CloudStore.setStatus(status);
   };
 
-  const handlePostAnnouncement = (e: React.FormEvent) => {
+  const handleSavePromo = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAnnouncement.trim()) return;
-    CloudStore.addAnnouncement(newAnnouncement);
-    setNewAnnouncement("");
+    CloudStore.setPromoCode(promoCode);
+    setSavedMessage(true);
+    setTimeout(() => setSavedMessage(false), 2000);
   };
-
-  const handleClear = () => {
-    if(confirm("Are you sure you want to delete all announcements? This action cannot be undone.")) {
-        CloudStore.clearAnnouncements();
-    }
-  }
 
   // ------------------------------------------------------------------
   // RENDER: LOGIN SCREEN
@@ -176,57 +176,37 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentStatus, announcements, o
                 Services Down
               </button>
             </div>
-            <p className="text-xs text-slate-500 mt-2">Changes are broadcast instantly to all connected users.</p>
           </section>
 
-          {/* Announcement Control */}
-          <section>
+          {/* Promo Code Control */}
+          <section className="border-t border-slate-800 pt-8">
              <h3 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
-                <Send className="w-5 h-5 text-brand-400" /> Post Announcement
+                <TicketPercent className="w-5 h-5 text-brand-400" /> Manage Promo Code
             </h3>
-            <form onSubmit={handlePostAnnouncement} className="space-y-4">
-              <div className="relative">
-                <textarea
-                  value={newAnnouncement}
-                  onChange={(e) => setNewAnnouncement(e.target.value)}
-                  placeholder="Type your global announcement here..."
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent min-h-[120px] resize-none"
-                />
-              </div>
-              <div className="flex justify-end">
+            <div className="bg-slate-950 rounded-xl p-6 border border-slate-800">
+              <p className="text-slate-400 text-sm mb-4">Set the active promo code that users can redeem for a discount.</p>
+              <form onSubmit={handleSavePromo} className="flex gap-4">
+                <div className="relative flex-grow">
+                  <input
+                    type="text"
+                    value={promoCode}
+                    onChange={(e) => {
+                        setPromoCode(e.target.value);
+                        if(savedMessage) setSavedMessage(false);
+                    }}
+                    placeholder="e.g., LOGIFY2024"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono uppercase"
+                  />
+                </div>
                 <button
                   type="submit"
-                  disabled={!newAnnouncement.trim()}
-                  className="px-6 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-6 py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold transition-all flex items-center gap-2 shrink-0 active:scale-95"
                 >
-                  <Send className="w-4 h-4" />
-                  Post Live
+                  {savedMessage ? <span className="text-emerald-300">Saved!</span> : <> <Save className="w-4 h-4" /> Save Code </>}
                 </button>
-              </div>
-            </form>
+              </form>
+            </div>
           </section>
-
-          {/* History */}
-           <section className="border-t border-slate-800 pt-6">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Recent Posts</h3>
-                    <button 
-                        onClick={handleClear} 
-                        className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/50 rounded-lg text-xs font-medium text-red-400 hover:text-red-300 flex items-center gap-2 transition-all"
-                    >
-                        <Trash2 className="w-3.5 h-3.5" /> Clear Announcements
-                    </button>
-                </div>
-                <div className="space-y-3">
-                    {announcements.length === 0 && <p className="text-slate-600 italic">No active announcements.</p>}
-                    {announcements.map((ann) => (
-                        <div key={ann.id} className="p-3 bg-slate-800/50 rounded-lg text-sm text-slate-300 border-l-2 border-slate-600">
-                            {ann.message}
-                            <div className="text-[10px] text-slate-500 mt-1">{new Date(ann.timestamp).toLocaleString()}</div>
-                        </div>
-                    ))}
-                </div>
-           </section>
 
         </div>
       </div>
