@@ -5,13 +5,12 @@ import { Client, Databases, ID, Query } from 'appwrite';
 // ------------------------------------------------------------------
 // CONFIGURATION STORAGE
 // ------------------------------------------------------------------
-// V8: Bumped version to clear potential stale state
-const STORAGE_KEY_CONFIG = 'logify_config_v8';
+// V9: Bumped version to apply new connection logic
+const STORAGE_KEY_CONFIG = 'logify_config_v9';
 
 const DEFAULT_CONFIG = {
   ENDPOINT: "https://cloud.appwrite.io/v1",
   // REPLACE THESE WITH YOUR OWN APPWRITE PROJECT IDs IF YOU WANT CLOUD SYNC
-  // IF YOU LEAVE THESE AS IS, THE APP WILL RUN IN OFFLINE MODE AUTOMATICALLY
   PROJECT_ID: "692149fe003bf76cb55b", 
   DB: "69214ab3003cd5ab7575",         
   COLL_SETTINGS: "settings",
@@ -36,6 +35,7 @@ let currentConfig = loadConfig();
 let client: Client | null = null;
 let databases: Databases | null = null;
 let isConnected = false;
+let connectionError: string | null = null;
 
 // Initialize Appwrite
 const initAppwrite = () => {
@@ -45,15 +45,18 @@ const initAppwrite = () => {
         .setEndpoint(currentConfig.ENDPOINT)
         .setProject(currentConfig.PROJECT_ID);
       databases = new Databases(client);
-      // We tentatively set true, but will disable on first network error
+      
+      // Optimistically set true. We only disable if a NETWORK request fails completely.
       isConnected = true;
-      // console.log(`✅ Appwrite Client Initialized`);
-    } catch (e) {
+      connectionError = null;
+    } catch (e: any) {
       console.error("❌ Failed to initialize Appwrite client:", e);
       isConnected = false;
+      connectionError = e.message || "Initialization Failed";
     }
   } else {
     isConnected = false;
+    connectionError = "Missing Configuration";
   }
 };
 
@@ -96,10 +99,11 @@ const logError = (msg: string, e: any) => {
     } catch (err) {
         details = 'Unknown Error';
     }
-    // Only log critical errors, skip network errors in offline mode
+    
     if (!details.includes('Failed to fetch') && !details.includes('NetworkError')) {
         console.warn(`[CloudStore] ${msg}: ${details}`);
     }
+    return details;
 };
 
 // ------------------------------------------------------------------
@@ -109,6 +113,8 @@ const logError = (msg: string, e: any) => {
 export const CloudStore = {
   
   getConfig: () => currentConfig,
+  
+  getConnectionError: () => connectionError,
 
   saveConfig: (newConfig: Partial<typeof DEFAULT_CONFIG>) => {
     const merged = { ...currentConfig, ...newConfig };
@@ -138,7 +144,8 @@ export const CloudStore = {
     if (isConnected && databases && client) {
         databases.getDocument(currentConfig.DB, currentConfig.COLL_SETTINGS, currentConfig.DOC_GLOBAL)
             .then(doc => {
-                // SUCCESS: Connection verified
+                // SUCCESS: Connection verified and data found
+                connectionError = null; // Clear any previous errors
                 if(doc.status) {
                     callback(doc.status as OrderStatus);
                     LocalFallback.set('orderStatus', doc.status);
@@ -158,10 +165,41 @@ export const CloudStore = {
                     // Silent fail for realtime
                 }
             })
-            .catch(e => {
-                // FAILURE: Network error or config error
-                console.info("ℹ️ Offline Mode Active: Using local storage only (Backend unreachable).");
-                isConnected = false; // DISABLE CLOUD FOR SESSION
+            .catch(async (e: any) => {
+                // ERROR HANDLING REFINED
+                
+                // 1. Check for 404 (Not Found)
+                // This means the backend is reachable, but data is missing. 
+                // We should NOT disconnect, but rather try to fix it.
+                if (e.code === 404) {
+                    console.warn("⚠️ Cloud Connected, but Document Not Found (404). Attempting auto-creation...");
+                    connectionError = "Data missing (404)";
+                    
+                    try {
+                        // Attempt creation (Requires 'create' permission for 'role:any' or authenticated user)
+                        await databases!.createDocument(currentConfig.DB, currentConfig.COLL_SETTINGS, currentConfig.DOC_GLOBAL, {
+                            status: OrderStatus.ACCEPTING,
+                            promoCode: ''
+                        });
+                        console.log("✅ Auto-created global_settings document.");
+                        connectionError = null; // Clear error if fixed
+                    } catch (createErr: any) {
+                        console.error("❌ Auto-create failed.", createErr);
+                        connectionError = `Data Missing & Create Failed: ${createErr.message}`;
+                    }
+                } 
+                // 2. Check for Network Errors
+                else if (e.code === 0 || e.message?.toLowerCase().includes('network') || e.message?.toLowerCase().includes('fetch') || e.message?.toLowerCase().includes('failed to fetch')) {
+                    console.info("ℹ️ Offline Mode Active: Backend unreachable.");
+                    isConnected = false; 
+                    connectionError = "Network Error: Backend Unreachable";
+                }
+                // 3. Other Errors (Auth, etc)
+                else {
+                    console.warn("⚠️ Cloud Error:", e);
+                    connectionError = e.message || "Unknown Cloud Error";
+                    // We stay connected technically to allow Admin to see the error
+                }
             });
     }
 
@@ -285,6 +323,10 @@ export const CloudStore = {
                 callback(list);
                 localStorage.setItem('announcements', JSON.stringify(list));
             }).catch(e => {
+                // If 404 on List, it usually means Collection Not Found
+                if (e.code === 404) {
+                    console.warn("⚠️ Announcements Collection Not Found (404).");
+                }
                 loadLocal(); // Fallback
             });
         };
@@ -324,7 +366,7 @@ export const CloudStore = {
         try {
             await databases.createDocument(currentConfig.DB, currentConfig.COLL_ANNOUNCE, ID.unique(), data);
         } catch (e) {
-            // Ignore cloud errors if offline
+             console.error("Failed to create announcement in cloud", e);
         }
     }
   },

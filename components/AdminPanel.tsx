@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { OrderStatus } from '../types';
 import { CloudStore } from '../services/cloudStore';
-import { X, Radio, ShieldCheck, Lock, KeyRound, AlertCircle, TicketPercent, Save, Cloud, HardDrive, LogOut } from 'lucide-react';
+import { X, Radio, ShieldCheck, Lock, KeyRound, AlertCircle, TicketPercent, Save, Cloud, HardDrive, LogOut, Wifi, WifiOff } from 'lucide-react';
 
 interface AdminPanelProps {
   currentStatus: OrderStatus;
@@ -10,7 +10,6 @@ interface AdminPanelProps {
 }
 
 // Security Configuration
-// Updated Password per request
 const ADMIN_PASSWORD = "logify@makers!are!the!goat853@$r72;[";
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ currentStatus, onClose }) => {
@@ -22,11 +21,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentStatus, onClose }) => {
   // Admin State
   const [promoCode, setPromoCode] = useState("");
   const [savedMessage, setSavedMessage] = useState(false);
+  
+  // Diagnostics
+  const [connError, setConnError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = CloudStore.subscribeToPromoCode(setPromoCode);
+    // Poll for errors
+    const interval = setInterval(() => {
+        setConnError(CloudStore.getConnectionError());
+    }, 1000);
+
     // @ts-ignore
-    return () => unsub && unsub();
+    return () => {
+        unsub && unsub();
+        clearInterval(interval);
+    };
   }, []);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -140,9 +150,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentStatus, onClose }) => {
 
             <div className="mt-auto pt-4 border-t border-slate-800 space-y-2">
                 {/* Status Indicator */}
-                <div className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium ${isCloud ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
-                    {isCloud ? <Cloud className="w-3 h-3" /> : <HardDrive className="w-3 h-3" />}
-                    {isCloud ? 'Cloud Active' : 'Local Mode'}
+                <div className={`flex flex-col gap-1 px-4 py-3 rounded-xl border ${isCloud ? 'bg-emerald-950/30 border-emerald-900' : 'bg-amber-950/30 border-amber-900'}`}>
+                   <div className="flex items-center gap-2">
+                        {isCloud ? <Wifi className="w-4 h-4 text-emerald-500" /> : <WifiOff className="w-4 h-4 text-amber-500" />}
+                        <span className={`text-sm font-semibold ${isCloud ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {isCloud ? 'Cloud Connected' : 'Offline Mode'}
+                        </span>
+                   </div>
+                   {/* Connection Detail Error */}
+                   {connError && (
+                       <p className="text-[10px] text-red-400 mt-1 leading-tight break-words border-t border-red-900/30 pt-1">
+                           {connError}
+                       </p>
+                   )}
                 </div>
 
                 <button onClick={onClose} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-slate-400 hover:bg-slate-900 hover:text-white transition-all">
