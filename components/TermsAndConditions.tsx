@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Check, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { Check, X, Shield } from 'lucide-react';
 
 const TERMS = [
   {
@@ -36,42 +37,66 @@ const TermsAndConditions: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <section className="w-full max-w-4xl mx-auto mt-20 mb-10">
+    <>
+      {/* Footer Link Trigger */}
       <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-6 bg-slate-900/50 border border-slate-800 hover:bg-slate-900 transition-all rounded-xl group"
+        onClick={() => setIsOpen(true)}
+        className="text-slate-500 hover:text-brand-400 transition-colors text-xs md:text-sm font-medium hover:underline underline-offset-4"
       >
-        <div className="flex items-center gap-3">
-            <FileText className="w-6 h-6 text-slate-500 group-hover:text-brand-400 transition-colors" />
-            <div className="text-left">
-                <h2 className="text-lg font-bold text-slate-300 group-hover:text-white transition-colors">Terms & Conditions</h2>
-                <p className="text-xs text-slate-500">Click to view our policies and guidelines</p>
-            </div>
-        </div>
-        {isOpen ? <ChevronUp className="w-5 h-5 text-brand-500" /> : <ChevronDown className="w-5 h-5 text-slate-500" />}
+        Terms & Conditions
       </button>
 
+      {/* Modal Overlay */}
       {isOpen && (
-        <div className="mt-4 bg-slate-950/50 border border-slate-800/50 rounded-2xl p-6 md:p-8 space-y-6 animate-in slide-in-from-top-2 fade-in duration-300">
-            <div className="flex items-center gap-2 mb-6 pb-4 border-b border-slate-800">
-                <span className="text-sm text-slate-400">Please read carefully before placing an order.</span>
-            </div>
-            {TERMS.map((term, index) => (
-            <div key={index} className="flex gap-4 items-start">
-                <div className="mt-1 shrink-0">
-                <Check className="w-5 h-5 text-sky-500" />
-                </div>
-                <div>
-                <h4 className="text-sky-400 font-bold text-base mb-1">{term.title}:</h4>
-                <p className="text-slate-300 text-sm leading-relaxed">
-                    {term.content}
-                </p>
-                </div>
-            </div>
-            ))}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+           <div 
+             className="bg-slate-900 border border-slate-700 w-full max-w-2xl max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300"
+             onClick={(e) => e.stopPropagation()}
+           >
+              {/* Header */}
+              <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-brand-500" /> Terms & Conditions
+                 </h2>
+                 <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-white transition-colors">
+                    <X className="w-5 h-5" />
+                 </button>
+              </div>
+              
+              {/* Content */}
+              <div className="overflow-y-auto p-6 space-y-6 bg-slate-900/50 custom-scrollbar">
+                 <p className="text-sm text-slate-400 italic border-b border-slate-800 pb-4 mb-4">
+                    Last updated: {new Date().toLocaleDateString()}
+                 </p>
+                 {TERMS.map((term, index) => (
+                    <div key={index} className="flex gap-3 group">
+                       <div className="shrink-0 mt-1 w-5 h-5 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center group-hover:border-brand-500/50 group-hover:bg-brand-500/10 transition-colors">
+                          <Check className="w-3 h-3 text-slate-500 group-hover:text-brand-400" />
+                       </div>
+                       <div>
+                          <h3 className="text-slate-200 font-semibold text-sm mb-1 group-hover:text-brand-200 transition-colors">{term.title}</h3>
+                          <p className="text-slate-400 text-xs md:text-sm leading-relaxed">{term.content}</p>
+                       </div>
+                    </div>
+                 ))}
+              </div>
+              
+              {/* Footer Action */}
+              <div className="p-4 border-t border-slate-800 bg-slate-950 flex justify-end">
+                  <button 
+                    onClick={() => setIsOpen(false)}
+                    className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Close
+                  </button>
+              </div>
+           </div>
+           
+           {/* Click outside to close */}
+           <div className="absolute inset-0 -z-10" onClick={() => setIsOpen(false)}></div>
         </div>
       )}
-    </section>
+    </>
   );
 };
 
