@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { OrderStatus, Announcement } from '../types';
 import { CloudStore } from '../services/cloudStore';
-import { X, Send, Radio, ShieldCheck, Trash2 } from 'lucide-react';
+import { X, Send, Radio, ShieldCheck, Trash2, Lock, KeyRound, AlertCircle } from 'lucide-react';
 
 interface AdminPanelProps {
   currentStatus: OrderStatus;
@@ -9,8 +9,28 @@ interface AdminPanelProps {
   onClose: () => void;
 }
 
+// Security Configuration
+const ADMIN_PASSWORD = "logify@makers!are!the!goat853@$r72;[";
+
 const AdminPanel: React.FC<AdminPanelProps> = ({ currentStatus, announcements, onClose }) => {
+  // Auth State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [loginError, setLoginError] = useState(false);
+
+  // Admin State
   const [newAnnouncement, setNewAnnouncement] = useState("");
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordInput === ADMIN_PASSWORD) {
+      setIsAuthenticated(true);
+      setLoginError(false);
+    } else {
+      setLoginError(true);
+      setPasswordInput("");
+    }
+  };
 
   const handleStatusChange = (status: OrderStatus) => {
     CloudStore.setStatus(status);
@@ -29,8 +49,74 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentStatus, announcements, o
     }
   }
 
+  // ------------------------------------------------------------------
+  // RENDER: LOGIN SCREEN
+  // ------------------------------------------------------------------
+  if (!isAuthenticated) {
+    return (
+      <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+            {/* Login Header */}
+            <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+                <div className="flex items-center gap-2 text-slate-200">
+                    <Lock className="w-5 h-5 text-brand-500" />
+                    <span className="font-bold">Admin Access Required</span>
+                </div>
+                <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
+                    <X className="w-5 h-5" />
+                </button>
+            </div>
+            
+            {/* Login Form */}
+            <form onSubmit={handleLogin} className="p-6 space-y-6">
+                <div>
+                    <label className="block text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">
+                        Enter Security Key
+                    </label>
+                    <div className="relative">
+                        <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                        <input 
+                            type="password" 
+                            value={passwordInput}
+                            onChange={(e) => {
+                                setPasswordInput(e.target.value);
+                                if(loginError) setLoginError(false);
+                            }}
+                            className={`w-full bg-slate-950 border rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:ring-1 transition-all ${
+                                loginError 
+                                ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500' 
+                                : 'border-slate-700 focus:border-brand-500 focus:ring-brand-500'
+                            }`}
+                            placeholder="••••••••••••••••"
+                            autoFocus
+                        />
+                    </div>
+                </div>
+
+                {loginError && (
+                    <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 p-3 rounded-lg border border-red-500/20 animate-in slide-in-from-top-1">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>Access Denied: Invalid Key</span>
+                    </div>
+                )}
+
+                <button 
+                    type="submit"
+                    className="w-full bg-brand-600 hover:bg-brand-500 text-white py-3 rounded-xl font-bold transition-all shadow-lg shadow-brand-900/20 active:scale-[0.98]"
+                >
+                    Unlock Panel
+                </button>
+            </form>
+        </div>
+      </div>
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // RENDER: DASHBOARD
+  // ------------------------------------------------------------------
   return (
-    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-950">

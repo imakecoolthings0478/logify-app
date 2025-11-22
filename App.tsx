@@ -1,10 +1,14 @@
-import React from 'react';
-import { ServiceItem } from './types';
+import React, { useEffect, useState } from 'react';
+import { ServiceItem, OrderStatus, Announcement } from './types';
 import { DISCORD_LINK } from './constants';
+import { CloudStore } from './services/cloudStore';
 import ServiceCard from './components/ServiceCard';
 import PricingPanel from './components/PricingPanel';
 import TermsAndConditions from './components/TermsAndConditions';
-import { Disc as DiscordIcon, Sparkles } from 'lucide-react';
+import StatusBanner from './components/StatusBanner';
+import AnnouncementBoard from './components/AnnouncementBoard';
+import AdminPanel from './components/AdminPanel';
+import { Disc as DiscordIcon, Sparkles, Lock } from 'lucide-react';
 
 const SERVICES: ServiceItem[] = [
   {
@@ -34,9 +38,41 @@ const SERVICES: ServiceItem[] = [
 ];
 
 const App: React.FC = () => {
+  const [status, setStatus] = useState<OrderStatus>(OrderStatus.ACCEPTING);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [showAdmin, setShowAdmin] = useState(false);
+  // Secret counter to open admin
+  const [clickCount, setClickCount] = useState(0);
+
+  useEffect(() => {
+    const unsubStatus = CloudStore.subscribeToStatus(setStatus);
+    const unsubAnnounce = CloudStore.subscribeToAnnouncements(setAnnouncements);
+    return () => {
+      // @ts-ignore
+      if(unsubStatus) unsubStatus();
+      // @ts-ignore
+      if(unsubAnnounce) unsubAnnounce();
+    };
+  }, []);
+
+  const handleSecretClick = () => {
+    if (clickCount + 1 >= 5) {
+      setShowAdmin(true);
+      setClickCount(0);
+    } else {
+      setClickCount(prev => prev + 1);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-white pb-10">
       
+      {/* 1. Status Banner at Top */}
+      <StatusBanner status={status} />
+
+      {/* 2. Announcement Board */}
+      <AnnouncementBoard announcements={announcements} />
+
       {/* Main Content Container */}
       <main className="flex-grow container mx-auto px-4 pt-10 pb-20">
         
@@ -50,7 +86,10 @@ const App: React.FC = () => {
               <Sparkles className="w-3 h-3" /> Premium Design Services
             </div>
             
-            <h1 className="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400 mb-6 tracking-tight">
+            <h1 
+              onClick={handleSecretClick}
+              className="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400 mb-6 tracking-tight cursor-default select-none"
+            >
               Logify Makers
             </h1>
             
@@ -103,10 +142,25 @@ const App: React.FC = () => {
 
       {/* Footer */}
       <footer className="border-t border-slate-800 py-8 bg-slate-950/50 backdrop-blur-lg">
-        <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-center gap-4 text-slate-500 text-sm">
+        <div className="container mx-auto px-4 flex flex-col items-center justify-center gap-4 text-slate-500 text-sm">
           <p>© {new Date().getFullYear()} Logify Makers. All rights reserved.</p>
+          <button 
+            onClick={() => setShowAdmin(true)}
+            className="opacity-30 hover:opacity-100 transition-opacity flex items-center gap-1 text-xs"
+          >
+            <Lock className="w-3 h-3" /> Admin Login
+          </button>
         </div>
       </footer>
+
+      {/* Admin Modal */}
+      {showAdmin && (
+        <AdminPanel 
+          currentStatus={status}
+          announcements={announcements}
+          onClose={() => setShowAdmin(false)}
+        />
+      )}
 
     </div>
   );
