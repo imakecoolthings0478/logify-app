@@ -10,7 +10,7 @@ import StatusBanner from './components/StatusBanner';
 import PromoCodeSection from './components/PromoCodeSection';
 import AdminPanel from './components/AdminPanel';
 import FAQSection from './components/FAQSection';
-import ChatBot from './components/ChatBot';
+import FlappyBirdGame from './components/FlappyBirdGame';
 import Reveal from './components/Reveal';
 import { Disc as DiscordIcon, Sparkles, Lock, ChevronDown } from 'lucide-react';
 
@@ -44,7 +44,11 @@ const SERVICES: ServiceItem[] = [
 const App: React.FC = () => {
   const [status, setStatus] = useState<OrderStatus>(OrderStatus.ACCEPTING);
   const [showAdmin, setShowAdmin] = useState(false);
-  const [clickCount, setClickCount] = useState(0);
+  
+  // Secret Triggers
+  const [adminClickCount, setAdminClickCount] = useState(0);
+  const [footerClickCount, setFooterClickCount] = useState(0);
+  const [showGame, setShowGame] = useState(false);
 
   useEffect(() => {
     const unsubStatus = CloudStore.subscribeToStatus(setStatus);
@@ -55,11 +59,20 @@ const App: React.FC = () => {
   }, []);
 
   const handleSecretClick = () => {
-    if (clickCount + 1 >= 5) {
+    if (adminClickCount + 1 >= 5) {
       setShowAdmin(true);
-      setClickCount(0);
+      setAdminClickCount(0);
     } else {
-      setClickCount(prev => prev + 1);
+      setAdminClickCount(prev => prev + 1);
+    }
+  };
+
+  const handleFooterEasterEgg = () => {
+    if (footerClickCount + 1 >= 7) {
+        setShowGame(true);
+        setFooterClickCount(0);
+    } else {
+        setFooterClickCount(prev => prev + 1);
     }
   };
 
@@ -168,9 +181,16 @@ const App: React.FC = () => {
       {/* Footer */}
       <footer className="border-t border-slate-900 py-12 bg-[#020203]">
         <div className="container mx-auto px-4 flex flex-col items-center justify-center gap-6 text-slate-500 text-sm">
-          <div className="flex items-center gap-2 text-slate-300 font-bold text-xl tracking-tight">
-             <span className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white text-xs">LM</span> Logify Makers
+          
+          {/* EASTER EGG TRIGGER */}
+          <div 
+            onClick={handleFooterEasterEgg}
+            className="flex items-center gap-2 text-slate-300 font-bold text-xl tracking-tight select-none cursor-pointer active:scale-95 transition-transform hover:text-white"
+            title="Logify Makers"
+          >
+             <span className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white text-xs pointer-events-none">LM</span> Logify Makers
           </div>
+          
           <p>© {new Date().getFullYear()} Logify Makers. All rights reserved.</p>
           
           <div className="flex items-center gap-6 mt-2">
@@ -193,8 +213,8 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* AI Chat Bot */}
-      <ChatBot />
+      {/* Flappy Bird Easter Egg */}
+      {showGame && <FlappyBirdGame onClose={() => setShowGame(false)} />}
 
     </div>
   );
