@@ -37,7 +37,7 @@ const PromoCodeSection: React.FC = () => {
                 </div>
                 <h3 className="text-xl font-bold text-emerald-300 mb-2">Code Applied!</h3>
                 <p className="text-emerald-200/90 mb-6 font-medium">
-                    You got a discount join our discord for off
+                    You got a discount! Join our Discord to claim it.
                 </p>
                 <a 
                     href={DISCORD_LINK}

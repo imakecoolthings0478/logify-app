@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { OrderStatus } from '../types';
 import { CloudStore } from '../services/cloudStore';
-import { X, Radio, ShieldCheck, Lock, KeyRound, AlertCircle, TicketPercent, Save } from 'lucide-react';
+import { X, Radio, ShieldCheck, Lock, KeyRound, AlertCircle, TicketPercent, Save, Cloud, HardDrive, LogOut } from 'lucide-react';
 
 interface AdminPanelProps {
   currentStatus: OrderStatus;
@@ -9,6 +10,7 @@ interface AdminPanelProps {
 }
 
 // Security Configuration
+// Updated Password per request
 const ADMIN_PASSWORD = "logify@makers!are!the!goat853@$r72;[";
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ currentStatus, onClose }) => {
@@ -49,6 +51,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentStatus, onClose }) => {
     setTimeout(() => setSavedMessage(false), 2000);
   };
 
+  const isCloud = CloudStore.isConfigured();
+
   // ------------------------------------------------------------------
   // RENDER: LOGIN SCREEN
   // ------------------------------------------------------------------
@@ -87,7 +91,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentStatus, onClose }) => {
                                 ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500' 
                                 : 'border-slate-700 focus:border-brand-500 focus:ring-brand-500'
                             }`}
-                            placeholder="••••••••••••••••"
+                            placeholder="Enter password..."
                             autoFocus
                         />
                     </div>
@@ -117,97 +121,111 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentStatus, onClose }) => {
   // ------------------------------------------------------------------
   return (
     <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-950">
-          <div className="flex items-center gap-3">
-            <ShieldCheck className="w-6 h-6 text-brand-500" />
-            <h2 className="text-2xl font-bold text-white">Admin Control Center</h2>
-          </div>
-          <button 
-            onClick={onClose}
-            className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
+      <div className="bg-slate-900 border border-slate-700 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row max-h-[90vh] h-[600px]">
+        
+        {/* Sidebar Navigation */}
+        <div className="w-full md:w-64 bg-slate-950 border-r border-slate-800 p-4 flex flex-col gap-2 shrink-0">
+            <div className="mb-6 px-2 pt-2">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-brand-500" /> Admin
+                </h2>
+                <p className="text-xs text-slate-500">Control Center</p>
+            </div>
+
+            <button 
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all bg-brand-600 text-white shadow-lg shadow-brand-900/20 cursor-default"
+            >
+                <Radio className="w-4 h-4" /> Dashboard
+            </button>
+
+            <div className="mt-auto pt-4 border-t border-slate-800 space-y-2">
+                {/* Status Indicator */}
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium ${isCloud ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                    {isCloud ? <Cloud className="w-3 h-3" /> : <HardDrive className="w-3 h-3" />}
+                    {isCloud ? 'Cloud Active' : 'Local Mode'}
+                </div>
+
+                <button onClick={onClose} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-slate-400 hover:bg-slate-900 hover:text-white transition-all">
+                    <LogOut className="w-4 h-4" /> Logout / Close
+                </button>
+            </div>
         </div>
 
-        <div className="overflow-y-auto p-6 space-y-8">
-          
-          {/* Status Control */}
-          <section>
-            <h3 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
-                <Radio className="w-5 h-5 text-brand-400" /> Live Order Status
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <button
-                onClick={() => handleStatusChange(OrderStatus.ACCEPTING)}
-                className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
-                  currentStatus === OrderStatus.ACCEPTING 
-                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]' 
-                    : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:border-slate-500'
-                }`}
-              >
-                <div className={`w-3 h-3 rounded-full ${currentStatus === OrderStatus.ACCEPTING ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></div>
-                Accepting Orders
-              </button>
-
-              <button
-                onClick={() => handleStatusChange(OrderStatus.NOT_ACCEPTING)}
-                className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
-                  currentStatus === OrderStatus.NOT_ACCEPTING 
-                    ? 'bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]' 
-                    : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:border-slate-500'
-                }`}
-              >
-                 <div className={`w-3 h-3 rounded-full ${currentStatus === OrderStatus.NOT_ACCEPTING ? 'bg-amber-500 animate-pulse' : 'bg-slate-600'}`}></div>
-                Not Accepting
-              </button>
-
-              <button
-                onClick={() => handleStatusChange(OrderStatus.SERVICES_DOWN)}
-                className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
-                  currentStatus === OrderStatus.SERVICES_DOWN 
-                    ? 'bg-red-500/20 border-red-500 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.2)]' 
-                    : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:border-slate-500'
-                }`}
-              >
-                 <div className={`w-3 h-3 rounded-full ${currentStatus === OrderStatus.SERVICES_DOWN ? 'bg-red-500 animate-pulse' : 'bg-slate-600'}`}></div>
-                Services Down
-              </button>
-            </div>
-          </section>
-
-          {/* Promo Code Control */}
-          <section className="border-t border-slate-800 pt-8">
-             <h3 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
-                <TicketPercent className="w-5 h-5 text-brand-400" /> Manage Promo Code
-            </h3>
-            <div className="bg-slate-950 rounded-xl p-6 border border-slate-800">
-              <p className="text-slate-400 text-sm mb-4">Set the active promo code that users can redeem for a discount.</p>
-              <form onSubmit={handleSavePromo} className="flex gap-4">
-                <div className="relative flex-grow">
-                  <input
-                    type="text"
-                    value={promoCode}
-                    onChange={(e) => {
-                        setPromoCode(e.target.value);
-                        if(savedMessage) setSavedMessage(false);
-                    }}
-                    placeholder="e.g., LOGIFY2024"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono uppercase"
-                  />
-                </div>
+        {/* Main Content Area */}
+        <div className="flex-grow overflow-y-auto p-6 space-y-8 h-full bg-slate-900">
+            {/* Status Control */}
+            <section>
+                <h3 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
+                    <Radio className="w-5 h-5 text-brand-400" /> Live Order Status
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <button
-                  type="submit"
-                  className="px-6 py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold transition-all flex items-center gap-2 shrink-0 active:scale-95"
+                    onClick={() => handleStatusChange(OrderStatus.ACCEPTING)}
+                    className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
+                    currentStatus === OrderStatus.ACCEPTING 
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]' 
+                        : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:border-slate-500'
+                    }`}
                 >
-                  {savedMessage ? <span className="text-emerald-300">Saved!</span> : <> <Save className="w-4 h-4" /> Save Code </>}
+                    <div className={`w-3 h-3 rounded-full ${currentStatus === OrderStatus.ACCEPTING ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></div>
+                    Accepting
                 </button>
-              </form>
-            </div>
-          </section>
 
+                <button
+                    onClick={() => handleStatusChange(OrderStatus.NOT_ACCEPTING)}
+                    className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
+                    currentStatus === OrderStatus.NOT_ACCEPTING 
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]' 
+                        : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:border-slate-500'
+                    }`}
+                >
+                    <div className={`w-3 h-3 rounded-full ${currentStatus === OrderStatus.NOT_ACCEPTING ? 'bg-amber-500 animate-pulse' : 'bg-slate-600'}`}></div>
+                    Not Accepting
+                </button>
+
+                <button
+                    onClick={() => handleStatusChange(OrderStatus.SERVICES_DOWN)}
+                    className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
+                    currentStatus === OrderStatus.SERVICES_DOWN 
+                        ? 'bg-red-500/20 border-red-500 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.2)]' 
+                        : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:border-slate-500'
+                    }`}
+                >
+                    <div className={`w-3 h-3 rounded-full ${currentStatus === OrderStatus.SERVICES_DOWN ? 'bg-red-500 animate-pulse' : 'bg-slate-600'}`}></div>
+                    Services Down
+                </button>
+                </div>
+            </section>
+
+            {/* Promo Code Control */}
+            <section className="border-t border-slate-800 pt-8">
+                <h3 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
+                    <TicketPercent className="w-5 h-5 text-brand-400" /> Manage Promo Code
+                </h3>
+                <div className="bg-slate-950 rounded-xl p-6 border border-slate-800">
+                <p className="text-slate-400 text-sm mb-4">Set the active promo code that users can redeem for a discount.</p>
+                <form onSubmit={handleSavePromo} className="flex gap-4">
+                    <div className="relative flex-grow">
+                    <input
+                        type="text"
+                        value={promoCode}
+                        onChange={(e) => {
+                            setPromoCode(e.target.value);
+                            if(savedMessage) setSavedMessage(false);
+                        }}
+                        placeholder="e.g., LOGIFY2024"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono uppercase"
+                    />
+                    </div>
+                    <button
+                    type="submit"
+                    className="px-6 py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold transition-all flex items-center gap-2 shrink-0 active:scale-95"
+                    >
+                    {savedMessage ? <span className="text-emerald-300">Saved!</span> : <> <Save className="w-4 h-4" /> Save Code </>}
+                    </button>
+                </form>
+                </div>
+            </section>
         </div>
       </div>
     </div>

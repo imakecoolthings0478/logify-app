@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { ServiceItem, OrderStatus } from './types';
 import { DISCORD_LINK } from './constants';
@@ -40,12 +41,11 @@ const SERVICES: ServiceItem[] = [
 const App: React.FC = () => {
   const [status, setStatus] = useState<OrderStatus>(OrderStatus.ACCEPTING);
   const [showAdmin, setShowAdmin] = useState(false);
-  // Secret counter to open admin
   const [clickCount, setClickCount] = useState(0);
 
   useEffect(() => {
+    // Always works because CloudStore now falls back gracefully
     const unsubStatus = CloudStore.subscribeToStatus(setStatus);
-    // Announcements removed for now
     return () => {
       // @ts-ignore
       if(unsubStatus) unsubStatus();
@@ -88,8 +88,8 @@ const App: React.FC = () => {
             </h1>
             
             <p className="max-w-2xl mx-auto text-lg md:text-xl text-slate-400 leading-relaxed mb-10">
-              We create logos, banners for YouTube, professional profile photos, and thumbnails for creators. 
-              Top-tier quality at unbeatable rates with the best support in the industry.
+              We Logify Makers create logos, Banners for YouTube, professional profile photos, and high-quality thumbnails.
+              Get premium designs that make your channel stand out.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

@@ -1,203 +1,362 @@
+
 import { OrderStatus, Announcement } from '../types';
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set, push, remove, child, Database } from 'firebase/database';
+import { Client, Databases, ID, Query } from 'appwrite';
 
 // ------------------------------------------------------------------
-// FIREBASE CONFIGURATION
+// CONFIGURATION STORAGE
 // ------------------------------------------------------------------
-const firebaseConfig = {
-  apiKey: "AIzaSyAVXNZNepTlSISFkH1xUFhNYZooeGPeujE",
-  authDomain: "logify-web-app.firebaseapp.com",
-  databaseURL: "https://logify-web-app-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "logify-web-app",
-  storageBucket: "logify-web-app.firebasestorage.app",
-  messagingSenderId: "140654179240",
-  appId: "1:140654179240:web:afdf2a37b6c808f34e239d"
+// V8: Bumped version to clear potential stale state
+const STORAGE_KEY_CONFIG = 'logify_config_v8';
+
+const DEFAULT_CONFIG = {
+  ENDPOINT: "https://cloud.appwrite.io/v1",
+  // REPLACE THESE WITH YOUR OWN APPWRITE PROJECT IDs IF YOU WANT CLOUD SYNC
+  // IF YOU LEAVE THESE AS IS, THE APP WILL RUN IN OFFLINE MODE AUTOMATICALLY
+  PROJECT_ID: "692149fe003bf76cb55b", 
+  DB: "69214ab3003cd5ab7575",         
+  COLL_SETTINGS: "settings",
+  DOC_GLOBAL: "global_settings",
+  COLL_ANNOUNCE: "announcements"
 };
 
-let db: Database | null = null;
+// Load config from LocalStorage or use Defaults
+const loadConfig = () => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY_CONFIG);
+    if (stored) {
+      return { ...DEFAULT_CONFIG, ...JSON.parse(stored) };
+    }
+  } catch (e) {
+    console.warn("Failed to load config, reverting to defaults", e);
+  }
+  return DEFAULT_CONFIG;
+};
 
-try {
-  const app = initializeApp(firebaseConfig);
-  db = getDatabase(app);
-  console.log("✅ Firebase initialized successfully for project:", firebaseConfig.projectId);
-} catch (error) {
-  console.error("❌ Firebase initialization failed:", error);
-  console.warn("⚠️ Falling back to local storage mode.");
-}
+let currentConfig = loadConfig();
+let client: Client | null = null;
+let databases: Databases | null = null;
+let isConnected = false;
+
+// Initialize Appwrite
+const initAppwrite = () => {
+  if (currentConfig.PROJECT_ID && currentConfig.DB) {
+    try {
+      client = new Client()
+        .setEndpoint(currentConfig.ENDPOINT)
+        .setProject(currentConfig.PROJECT_ID);
+      databases = new Databases(client);
+      // We tentatively set true, but will disable on first network error
+      isConnected = true;
+      // console.log(`✅ Appwrite Client Initialized`);
+    } catch (e) {
+      console.error("❌ Failed to initialize Appwrite client:", e);
+      isConnected = false;
+    }
+  } else {
+    isConnected = false;
+  }
+};
+
+initAppwrite();
+
+// ------------------------------------------------------------------
+// Helper: LocalStorage Fallback (Offline Mode)
+// ------------------------------------------------------------------
+const LocalFallback = {
+    get: (key: string) => localStorage.getItem(key),
+    set: (key: string, val: string) => {
+        localStorage.setItem(key, val);
+        window.dispatchEvent(new Event(`local-${key}-change`));
+    },
+    subscribe: (key: string, cb: (val: string) => void) => {
+        const handler = () => cb(localStorage.getItem(key) || '');
+        window.addEventListener('storage', handler);
+        window.addEventListener(`local-${key}-change`, handler);
+        handler(); // Initial call
+        return () => {
+            window.removeEventListener('storage', handler);
+            window.removeEventListener(`local-${key}-change`, handler);
+        };
+    }
+};
+
+// Improved Error Logger
+const logError = (msg: string, e: any) => {
+    let details = '';
+    try {
+        if (e instanceof Error) details = e.message;
+        else if (typeof e === 'string') details = e;
+        else if (e && typeof e === 'object') {
+             if(e.message) details = e.message;
+             else if(e.code) details = `Code: ${e.code}`;
+             else details = JSON.stringify(e);
+        } else {
+            details = String(e);
+        }
+    } catch (err) {
+        details = 'Unknown Error';
+    }
+    // Only log critical errors, skip network errors in offline mode
+    if (!details.includes('Failed to fetch') && !details.includes('NetworkError')) {
+        console.warn(`[CloudStore] ${msg}: ${details}`);
+    }
+};
 
 // ------------------------------------------------------------------
 // Implementation
 // ------------------------------------------------------------------
 
 export const CloudStore = {
+  
+  getConfig: () => currentConfig,
+
+  saveConfig: (newConfig: Partial<typeof DEFAULT_CONFIG>) => {
+    const merged = { ...currentConfig, ...newConfig };
+    localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(merged));
+    window.location.reload();
+  },
+
+  resetConfig: () => {
+    localStorage.removeItem(STORAGE_KEY_CONFIG);
+    window.location.reload();
+  },
+
+  getMode: () => isConnected ? 'Hybrid (Cloud + Local)' : 'Offline Mode',
+
+  isConfigured: () => isConnected,
+
+  // --- STATUS ---
   subscribeToStatus: (callback: (status: OrderStatus) => void) => {
-    if (db) {
-      const statusRef = ref(db, 'status');
-      const unsubscribe = onValue(statusRef, (snapshot) => {
-        const val = snapshot.val();
-        if (val) callback(val);
-      }, (error) => {
-        console.error("Error reading status:", error);
-      });
-      return unsubscribe;
-    } else {
-      // Fallback: Local Storage
-      const stored = localStorage.getItem('orderStatus');
-      if (stored) callback(stored as OrderStatus);
-      
-      // Listen for local changes (cross-tab)
-      const handler = () => {
-         const s = localStorage.getItem('orderStatus');
-         if (s) callback(s as OrderStatus);
-      };
-      window.addEventListener('storage', handler);
-      // Also create a custom event for same-tab updates
-      window.addEventListener('local-status-change', handler);
-      return () => {
-        window.removeEventListener('storage', handler);
-        window.removeEventListener('local-status-change', handler);
-      };
+    let appwriteUnsub: () => void | undefined;
+
+    // 1. Always setup local listener (Primary Source of Truth for UI)
+    const localUnsub = LocalFallback.subscribe('orderStatus', (val) => {
+        callback((val as OrderStatus) || OrderStatus.ACCEPTING);
+    });
+
+    // 2. Attempt Cloud Connection
+    if (isConnected && databases && client) {
+        databases.getDocument(currentConfig.DB, currentConfig.COLL_SETTINGS, currentConfig.DOC_GLOBAL)
+            .then(doc => {
+                // SUCCESS: Connection verified
+                if(doc.status) {
+                    callback(doc.status as OrderStatus);
+                    LocalFallback.set('orderStatus', doc.status);
+                }
+                
+                // ONLY Initialize Realtime if fetch succeeded
+                try {
+                    const channel = `databases.${currentConfig.DB}.collections.${currentConfig.COLL_SETTINGS}.documents.${currentConfig.DOC_GLOBAL}`;
+                    appwriteUnsub = client!.subscribe(channel, (response: any) => {
+                        if (response.payload && response.payload.status) {
+                            const newStatus = response.payload.status;
+                            callback(newStatus);
+                            LocalFallback.set('orderStatus', newStatus);
+                        }
+                    });
+                } catch (rtErr) {
+                    // Silent fail for realtime
+                }
+            })
+            .catch(e => {
+                // FAILURE: Network error or config error
+                console.info("ℹ️ Offline Mode Active: Using local storage only (Backend unreachable).");
+                isConnected = false; // DISABLE CLOUD FOR SESSION
+            });
+    }
+
+    return () => {
+        localUnsub();
+        if (appwriteUnsub) appwriteUnsub();
+    };
+  },
+
+  setStatus: async (status: OrderStatus) => {
+    // Optimistic update
+    LocalFallback.set('orderStatus', status);
+
+    if (isConnected && databases) {
+        try {
+            await databases.updateDocument(currentConfig.DB, currentConfig.COLL_SETTINGS, currentConfig.DOC_GLOBAL, {
+                status: status
+            });
+        } catch (e: any) {
+            if (isConnected) { 
+                if (e.code === 404) {
+                     try {
+                        await databases.createDocument(currentConfig.DB, currentConfig.COLL_SETTINGS, currentConfig.DOC_GLOBAL, {
+                            status: status,
+                            promoCode: LocalFallback.get('promoCode') || ''
+                        });
+                     } catch (createErr) {
+                         logError("Failed to auto-create settings", createErr);
+                     }
+                } else {
+                    logError("Set Status Failed", e);
+                }
+            }
+        }
     }
   },
 
-  setStatus: (status: OrderStatus) => {
-    if (db) {
-      set(ref(db, 'status'), status).catch(e => console.error("Error setting status:", e));
-    } else {
-      localStorage.setItem('orderStatus', status);
-      window.dispatchEvent(new Event('local-status-change'));
-    }
-  },
-
-  // ----------------------------------------------------------------
-  // PROMO CODE LOGIC
-  // ----------------------------------------------------------------
+  // --- PROMO CODE ---
   subscribeToPromoCode: (callback: (code: string) => void) => {
-    if (db) {
-      const promoRef = ref(db, 'promoCode');
-      const unsubscribe = onValue(promoRef, (snapshot) => {
-        const val = snapshot.val();
+    let appwriteUnsub: () => void | undefined;
+    
+    const localUnsub = LocalFallback.subscribe('promoCode', (val) => {
         callback(val || '');
-      });
-      return unsubscribe;
-    } else {
-      const load = () => {
-        const stored = localStorage.getItem('promoCode');
-        callback(stored || '');
-      };
-      load();
-      const handler = () => load();
-      window.addEventListener('storage', handler);
-      window.addEventListener('local-promocode-change', handler);
-      return () => {
-        window.removeEventListener('storage', handler);
-        window.removeEventListener('local-promocode-change', handler);
-      };
+    });
+
+    if (isConnected && databases && client) {
+        databases.getDocument(currentConfig.DB, currentConfig.COLL_SETTINGS, currentConfig.DOC_GLOBAL)
+            .then(doc => {
+                const code = doc.promoCode || '';
+                callback(code);
+                LocalFallback.set('promoCode', code);
+
+                try {
+                    const channel = `databases.${currentConfig.DB}.collections.${currentConfig.COLL_SETTINGS}.documents.${currentConfig.DOC_GLOBAL}`;
+                    appwriteUnsub = client!.subscribe(channel, (response: any) => {
+                        if (response.payload) {
+                            const newCode = response.payload.promoCode || '';
+                            callback(newCode);
+                            LocalFallback.set('promoCode', newCode);
+                        }
+                    });
+                } catch (e) {}
+            })
+            .catch(() => {
+                // Already handled in Status subscription
+            });
+    }
+
+    return () => {
+        localUnsub();
+        if (appwriteUnsub) appwriteUnsub();
+    };
+  },
+
+  setPromoCode: async (code: string) => {
+    LocalFallback.set('promoCode', code);
+
+    if (isConnected && databases) {
+        try {
+            await databases.updateDocument(currentConfig.DB, currentConfig.COLL_SETTINGS, currentConfig.DOC_GLOBAL, {
+                promoCode: code
+            });
+        } catch (e: any) {
+            if (isConnected && e.code === 404) {
+                try {
+                    await databases.createDocument(currentConfig.DB, currentConfig.COLL_SETTINGS, currentConfig.DOC_GLOBAL, {
+                        status: LocalFallback.get('orderStatus') || OrderStatus.ACCEPTING,
+                        promoCode: code
+                    });
+                } catch (err) {}
+            }
+        }
     }
   },
 
-  setPromoCode: (code: string) => {
-    if (db) {
-      set(ref(db, 'promoCode'), code).catch(e => console.error("Error setting promo code:", e));
-    } else {
-      localStorage.setItem('promoCode', code);
-      window.dispatchEvent(new Event('local-promocode-change'));
-    }
-  },
-
-  // ----------------------------------------------------------------
-  // ANNOUNCEMENTS (Legacy/Disabled)
-  // ----------------------------------------------------------------
+  // --- ANNOUNCEMENTS ---
   subscribeToAnnouncements: (callback: (announcements: Announcement[]) => void) => {
-    if (db) {
-      const annRef = ref(db, 'announcements');
-      const unsubscribe = onValue(annRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          // Convert object to array
-          const list: Announcement[] = Object.keys(data).map(key => ({
-            id: key,
-            ...data[key]
-          }));
-          // Sort by new
-          list.sort((a, b) => b.timestamp - a.timestamp);
-          callback(list);
-        } else {
-          callback([]);
-        }
-      }, (error) => {
-        console.error("Error reading announcements:", error);
-      });
-      return unsubscribe;
-    } else {
-      // Fallback
-      const load = () => {
+    let appwriteUnsub: () => void | undefined;
+    
+    // Local handler
+    const loadLocal = () => {
         const stored = localStorage.getItem('announcements');
-        if (stored) {
-            callback(JSON.parse(stored));
-        } else {
-            callback([]);
-        }
-      };
-      load();
-      
-      const handler = () => load();
-      window.addEventListener('storage', handler);
-      window.addEventListener('local-announcement-change', handler);
-      return () => {
-          window.removeEventListener('storage', handler);
-          window.removeEventListener('local-announcement-change', handler);
-      };
+        callback(stored ? JSON.parse(stored) : []);
+    };
+    
+    window.addEventListener('local-announcements-change', loadLocal);
+    
+    if (isConnected && databases && client) {
+        const fetchAll = () => {
+            databases!.listDocuments(
+                currentConfig.DB, 
+                currentConfig.COLL_ANNOUNCE,
+                [Query.orderDesc('timestamp'), Query.limit(20)]
+            ).then(res => {
+                const list: Announcement[] = res.documents.map(doc => ({
+                    id: doc.$id,
+                    message: doc.message,
+                    timestamp: doc.timestamp,
+                    author: doc.author
+                }));
+                callback(list);
+                localStorage.setItem('announcements', JSON.stringify(list));
+            }).catch(e => {
+                loadLocal(); // Fallback
+            });
+        };
+
+        fetchAll();
+
+        try {
+            const channel = `databases.${currentConfig.DB}.collections.${currentConfig.COLL_ANNOUNCE}.documents`;
+            appwriteUnsub = client.subscribe(channel, () => fetchAll());
+        } catch (e) {}
+    } else {
+        loadLocal();
     }
+
+    return () => {
+        window.removeEventListener('local-announcements-change', loadLocal);
+        if (appwriteUnsub) appwriteUnsub();
+    };
   },
 
-  addAnnouncement: (message: string) => {
-    const newAnn = {
-      message,
-      timestamp: Date.now(),
-      author: 'Admin'
+  addAnnouncement: async (message: string) => {
+    const data = {
+        message,
+        timestamp: Date.now(),
+        author: 'Admin'
     };
 
-    if (db) {
-      push(ref(db, 'announcements'), newAnn).catch(e => console.error("Error posting announcement:", e));
-    } else {
-      const stored = localStorage.getItem('announcements');
-      const current = stored ? JSON.parse(stored) : [];
-      // Add simplified ID for local
-      const withId = { ...newAnn, id: crypto.randomUUID() };
-      current.unshift(withId);
-      localStorage.setItem('announcements', JSON.stringify(current));
-      window.dispatchEvent(new Event('local-announcement-change'));
+    // Optimistic Update (Local)
+    const stored = localStorage.getItem('announcements');
+    const current = stored ? JSON.parse(stored) : [];
+    const withId = { ...data, id: crypto.randomUUID() };
+    current.unshift(withId);
+    localStorage.setItem('announcements', JSON.stringify(current));
+    window.dispatchEvent(new Event('local-announcements-change'));
+
+    if (isConnected && databases) {
+        try {
+            await databases.createDocument(currentConfig.DB, currentConfig.COLL_ANNOUNCE, ID.unique(), data);
+        } catch (e) {
+            // Ignore cloud errors if offline
+        }
     }
   },
 
   deleteAnnouncement: async (id: string) => {
-    if (db) {
-      try {
-        const announcementsRef = ref(db, 'announcements');
-        await remove(child(announcementsRef, id));
-        console.log("✅ Announcement deleted successfully:", id);
-      } catch (e) {
-        console.error("❌ Error deleting announcement:", e);
-      }
-    } else {
-      const stored = localStorage.getItem('announcements');
-      if (stored) {
-        // @ts-ignore
-        const current = JSON.parse(stored).filter(a => a.id !== id);
+    // Optimistic
+    const stored = localStorage.getItem('announcements');
+    if (stored) {
+        const current = JSON.parse(stored).filter((a: Announcement) => a.id !== id);
         localStorage.setItem('announcements', JSON.stringify(current));
-        window.dispatchEvent(new Event('local-announcement-change'));
-      }
+        window.dispatchEvent(new Event('local-announcements-change'));
+    }
+
+    if (isConnected && databases) {
+        try {
+            await databases.deleteDocument(currentConfig.DB, currentConfig.COLL_ANNOUNCE, id);
+        } catch (e) {}
     }
   },
 
-  clearAnnouncements: () => {
-    if (db) {
-      set(ref(db, 'announcements'), null).catch(e => console.error("Error clearing announcements:", e));
-    } else {
-      localStorage.setItem('announcements', '[]');
-      window.dispatchEvent(new Event('local-announcement-change'));
+  clearAnnouncements: async () => {
+    localStorage.setItem('announcements', '[]');
+    window.dispatchEvent(new Event('local-announcements-change'));
+
+    if (isConnected && databases) {
+        try {
+            const res = await databases.listDocuments(currentConfig.DB, currentConfig.COLL_ANNOUNCE, [Query.limit(100)]);
+            const promises = res.documents.map(doc => 
+                databases!.deleteDocument(currentConfig.DB, currentConfig.COLL_ANNOUNCE, doc.$id).catch(() => {})
+            );
+            await Promise.all(promises);
+        } catch (e) {}
     }
   }
 };
