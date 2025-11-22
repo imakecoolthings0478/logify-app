@@ -1,8 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Chat } from "@google/genai";
-import { MessageSquare, X, Send, Bot, User, Loader2, Sparkles, ChevronDown } from 'lucide-react';
-import { DISCORD_LINK } from '../constants';
+import { MessageSquare, X, Bot, User, Loader2, Sparkles, ChevronDown } from 'lucide-react';
 
 const SYSTEM_INSTRUCTION = `You are the AI Support Assistant for Logify Makers, a premium design agency.
 Your role is to help users understand our services, pricing, and how to order.
@@ -30,6 +29,15 @@ TONE & BEHAVIOR:
 - Do not make up prices that are not listed above.
 `;
 
+const PREDEFINED_QUESTIONS = [
+  "What are your prices?",
+  "How do I place an order?",
+  "Do you make YouTube thumbnails?",
+  "What is your refund policy?",
+  "How long does delivery take?",
+  "Do you offer bundle deals?"
+];
+
 interface Message {
   id: string;
   role: 'user' | 'model';
@@ -42,16 +50,14 @@ const ChatBot: React.FC = () => {
     {
       id: 'welcome',
       role: 'model',
-      text: "Hi there! I'm the Logify AI Assistant. 👋 How can I help you with our designs or pricing today?"
+      text: "Hi there! I'm the Logify AI Assistant. 👋 Tap a question below to get started!"
     }
   ]);
-  const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
   // Refs
   const chatRef = useRef<Chat | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // Initialize Chat
   useEffect(() => {
@@ -75,29 +81,23 @@ const ChatBot: React.FC = () => {
   useEffect(() => {
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      // Focus input on open
-      setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [messages, isOpen]);
 
-  const handleSendMessage = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!inputText.trim() || isLoading) return;
+  const handleQuestionClick = async (questionText: string) => {
+    if (isLoading) return;
 
-    const userMsgText = inputText.trim();
     const newUserMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
-      text: userMsgText
+      text: questionText
     };
 
     setMessages(prev => [...prev, newUserMsg]);
-    setInputText('');
     setIsLoading(true);
 
     try {
       if (!chatRef.current) {
-          // Re-init if missing
            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
            chatRef.current = ai.chats.create({
             model: 'gemini-2.5-flash',
@@ -106,7 +106,7 @@ const ChatBot: React.FC = () => {
       }
 
       const result = await chatRef.current.sendMessage({
-        message: userMsgText
+        message: questionText
       });
 
       const botResponseText = result.text;
@@ -147,14 +147,14 @@ const ChatBot: React.FC = () => {
 
       {/* Chat Window */}
       <div 
-        className={`fixed bottom-24 right-6 z-40 w-[90vw] sm:w-96 max-h-[600px] h-[70vh] flex flex-col bg-slate-900/90 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 origin-bottom-right ${
+        className={`fixed bottom-24 right-6 z-40 w-[90vw] sm:w-96 h-[550px] max-h-[80vh] flex flex-col bg-slate-900/90 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 origin-bottom-right ${
           isOpen 
           ? 'opacity-100 scale-100 translate-y-0' 
           : 'opacity-0 scale-90 translate-y-10 pointer-events-none'
         }`}
       >
         {/* Header */}
-        <div className="p-4 bg-slate-950/50 border-b border-slate-800 flex items-center justify-between">
+        <div className="p-4 bg-slate-950/50 border-b border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-brand-500/20 flex items-center justify-center text-brand-400 border border-brand-500/30">
               <Sparkles className="w-4 h-4" />
@@ -218,27 +218,23 @@ const ChatBot: React.FC = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area */}
-        <div className="p-4 bg-slate-950/30 border-t border-slate-800">
-          <form onSubmit={handleSendMessage} className="relative flex items-center">
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Ask about logos, pricing..."
-              className="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all placeholder:text-slate-600"
-            />
-            <button 
-              type="submit"
-              disabled={!inputText.trim() || isLoading}
-              className="absolute right-2 p-2 bg-brand-600 text-white rounded-lg hover:bg-brand-500 disabled:opacity-50 disabled:hover:bg-brand-600 transition-all"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
-          <div className="text-center mt-2">
-             <p className="text-[10px] text-slate-600">AI can make mistakes. Review info.</p>
+        {/* Question Selection Area */}
+        <div className="p-3 bg-slate-950/95 border-t border-slate-800 backdrop-blur-md shrink-0 z-10">
+          <p className="text-[10px] text-slate-500 mb-2 font-medium uppercase tracking-wider ml-1">Select a topic:</p>
+          <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto custom-scrollbar pb-1">
+            {PREDEFINED_QUESTIONS.map((question, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleQuestionClick(question)}
+                disabled={isLoading}
+                className="text-left text-xs bg-slate-800 hover:bg-brand-600 border border-slate-700 hover:border-brand-500 text-slate-300 hover:text-white py-2 px-3 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shadow-sm"
+              >
+                {question}
+              </button>
+            ))}
+          </div>
+          <div className="text-center mt-1 border-t border-slate-800/50 pt-1">
+             <p className="text-[9px] text-slate-600">AI can make mistakes. Review info.</p>
           </div>
         </div>
       </div>
