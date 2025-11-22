@@ -63,13 +63,18 @@ const ChatBot: React.FC = () => {
   useEffect(() => {
     const initChat = () => {
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        chatRef.current = ai.chats.create({
-          model: 'gemini-2.5-flash',
-          config: {
-            systemInstruction: SYSTEM_INSTRUCTION,
-          },
-        });
+        // Only initialize if key is present (handled by vite define)
+        if (process.env.API_KEY) {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            chatRef.current = ai.chats.create({
+            model: 'gemini-2.5-flash',
+            config: {
+                systemInstruction: SYSTEM_INSTRUCTION,
+            },
+            });
+        } else {
+            console.warn("API Key not found in environment");
+        }
       } catch (error) {
         console.error("Failed to initialize AI chat", error);
       }
@@ -97,6 +102,10 @@ const ChatBot: React.FC = () => {
     setIsLoading(true);
 
     try {
+      if (!process.env.API_KEY) {
+          throw new Error("API Key is missing. Please configure it in Netlify.");
+      }
+
       if (!chatRef.current) {
            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
            chatRef.current = ai.chats.create({
@@ -147,14 +156,14 @@ const ChatBot: React.FC = () => {
 
       {/* Chat Window */}
       <div 
-        className={`fixed bottom-24 right-6 z-40 w-[90vw] sm:w-96 h-[550px] max-h-[80vh] flex flex-col bg-slate-900/90 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 origin-bottom-right ${
+        className={`fixed bottom-24 right-4 sm:right-6 z-40 w-[92vw] sm:w-96 h-[550px] max-h-[80vh] flex flex-col bg-slate-900/95 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 origin-bottom-right ${
           isOpen 
           ? 'opacity-100 scale-100 translate-y-0' 
           : 'opacity-0 scale-90 translate-y-10 pointer-events-none'
         }`}
       >
         {/* Header */}
-        <div className="p-4 bg-slate-950/50 border-b border-slate-800 flex items-center justify-between shrink-0">
+        <div className="p-3 bg-slate-950/50 border-b border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-brand-500/20 flex items-center justify-center text-brand-400 border border-brand-500/30">
               <Sparkles className="w-4 h-4" />
@@ -169,7 +178,7 @@ const ChatBot: React.FC = () => {
           </div>
           <button 
             onClick={() => setIsOpen(false)}
-            className="text-slate-500 hover:text-white transition-colors"
+            className="text-slate-500 hover:text-white transition-colors p-1"
           >
             <ChevronDown className="w-5 h-5" />
           </button>
@@ -194,7 +203,7 @@ const ChatBot: React.FC = () => {
 
                 {/* Bubble */}
                 <div 
-                  className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                  className={`px-3 py-2 rounded-2xl text-sm leading-relaxed ${
                     msg.role === 'user'
                     ? 'bg-brand-600 text-white rounded-tr-none shadow-md'
                     : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-none'
@@ -218,16 +227,16 @@ const ChatBot: React.FC = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Question Selection Area */}
-        <div className="p-3 bg-slate-950/95 border-t border-slate-800 backdrop-blur-md shrink-0 z-10">
-          <p className="text-[10px] text-slate-500 mb-2 font-medium uppercase tracking-wider ml-1">Select a topic:</p>
-          <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto custom-scrollbar pb-1">
+        {/* Question Selection Area - Compacted */}
+        <div className="p-2 bg-slate-950/95 border-t border-slate-800 backdrop-blur-md shrink-0 z-10">
+          <p className="text-[9px] text-slate-500 mb-1.5 font-medium uppercase tracking-wider ml-1">Select a topic:</p>
+          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar pb-1">
             {PREDEFINED_QUESTIONS.map((question, idx) => (
               <button
                 key={idx}
                 onClick={() => handleQuestionClick(question)}
                 disabled={isLoading}
-                className="text-left text-xs bg-slate-800 hover:bg-brand-600 border border-slate-700 hover:border-brand-500 text-slate-300 hover:text-white py-2 px-3 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shadow-sm"
+                className="text-left text-[11px] md:text-xs bg-slate-800 hover:bg-brand-600 border border-slate-700 hover:border-brand-500 text-slate-300 hover:text-white py-1.5 px-2.5 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shadow-sm"
               >
                 {question}
               </button>
